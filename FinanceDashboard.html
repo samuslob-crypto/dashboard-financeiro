@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Financeiro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f4f0; color: #1C1C1A; }
+.wrap { max-width: 820px; margin: 0 auto; padding: 2rem 1.5rem; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 12px; }
+.header-title { font-size: 18px; font-weight: 500; }
+.header-sub { font-size: 13px; color: #888; margin-top: 2px; }
+.month-sel { display: flex; gap: 6px; }
+.month-btn { padding: 5px 14px; font-size: 12px; border-radius: 8px; border: 1px solid #ddd; background: transparent; cursor: pointer; transition: all .15s; }
+.month-btn.active { background: #e8e8e4; font-weight: 500; border-color: #bbb; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+.card { background: #eeeee8; border-radius: 8px; padding: 1rem; }
+.card-label { font-size: 12px; color: #888; margin-bottom: 6px; }
+.card-value { font-size: 22px; font-weight: 500; }
+.card-badge { font-size: 11px; margin-top: 5px; }
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
+@media (max-width: 520px) { .charts-row { grid-template-columns: 1fr; } }
+.panel { background: #fff; border: 1px solid #e8e8e4; border-radius: 12px; padding: 1.25rem; }
+.panel-title { font-size: 13px; color: #666; margin-bottom: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #888; }
+.legend-sq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: #888; font-weight: 400; padding: 4px 8px 10px; border-bottom: 1px solid #f0f0f0; }
+th:last-child { text-align: right; }
+td { padding: 9px 8px; border-bottom: 1px solid #f8f8f8; }
+tr:last-child td { border-bottom: none; }
+td:last-child { text-align: right; font-weight: 500; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.pos { color: #3B6D11; }
+.neg { color: #A32D2D; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="header-title">Finanças Pessoais</div>
+      <div class="header-sub">Visão geral mensal</div>
+    </div>
+    <div class="month-sel" id="months"></div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="charts-row">
+    <div class="panel">
+      <div class="panel-title">Receitas vs Despesas</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-sq" style="background:#178A5A"></div>Receita</div>
+        <div class="legend-item"><div class="legend-sq" style="background:#D85A30"></div>Despesa</div>
+      </div>
+      <div style="position:relative;height:190px"><canvas id="barChart" role="img" aria-label="Gráfico de barras de receitas e despesas por mês">Comparativo de receitas e despesas mensais.</canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Despesas por categoria</div>
+      <div class="legend" id="pieLegend"></div>
+      <div style="position:relative;height:190px"><canvas id="pieChart" role="img" aria-label="Gráfico de rosca com despesas por categoria">Divisão de despesas por categoria.</canvas></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title" style="margin-bottom:.75rem">Últimas transações</div>
+    <table id="txTable">
+      <thead><tr><th>Descrição</th><th>Categoria</th><th>Data</th><th>Valor</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const data = {
+  Jan: { receita:4200, despesa:3100, poupanca:1100, delta:4.2,
+    cats:{Moradia:900,Alimentação:620,Transporte:380,Lazer:510,Saúde:290,Outros:400},
+    tx:[{desc:'Salário',cat:'Renda',date:'31/01',val:4200,type:1},{desc:'Aluguel',cat:'Moradia',date:'05/01',val:-900,type:0},{desc:'Supermercado',cat:'Alimentação',date:'08/01',val:-320,type:0},{desc:'Uber',cat:'Transporte',date:'12/01',val:-85,type:0},{desc:'Netflix + Spotify',cat:'Lazer',date:'15/01',val:-65,type:0}]},
+  Fev: { receita:4200, despesa:2780, poupanca:1420, delta:7.6,
+    cats:{Moradia:900,Alimentação:540,Transporte:310,Lazer:420,Saúde:340,Outros:270},
+    tx:[{desc:'Salário',cat:'Renda',date:'28/02',val:4200,type:1},{desc:'Aluguel',cat:'Moradia',date:'05/02',val:-900,type:0},{desc:'Farmácia',cat:'Saúde',date:'10/02',val:-180,type:0},{desc:'iFood',cat:'Alimentação',date:'14/02',val:-95,type:0},{desc:'Academia',cat:'Saúde',date:'01/02',val:-160,type:0}]},
+  Mar: { receita:4700, despesa:3450, poupanca:1250, delta:-2.1,
+    cats:{Moradia:900,Alimentação:700,Transporte:500,Lazer:650,Saúde:200,Outros:500},
+    tx:[{desc:'Salário + bônus',cat:'Renda',date:'31/03',val:4700,type:1},{desc:'Aluguel',cat:'Moradia',date:'05/03',val:-900,type:0},{desc:'Viagem fds',cat:'Lazer',date:'18/03',val:-420,type:0},{desc:'Posto',cat:'Transporte',date:'22/03',val:-210,type:0},{desc:'Restaurante',cat:'Alimentação',date:'25/03',val:-190,type:0}]},
+  Abr: { receita:4200, despesa:2950, poupanca:1250, delta:0,
+    cats:{Moradia:900,Alimentação:580,Transporte:340,Lazer:480,Saúde:310,Outros:340},
+    tx:[{desc:'Salário',cat:'Renda',date:'30/04',val:4200,type:1},{desc:'Aluguel',cat:'Moradia',date:'05/04',val:-900,type:0},{desc:'Supermercado',cat:'Alimentação',date:'09/04',val:-280,type:0},{desc:'Plano de saúde',cat:'Saúde',date:'01/04',val:-310,type:0},{desc:'Cinema',cat:'Lazer',date:'20/04',val:-80,type:0}]}
+};
+
+const MONTHS = Object.keys(data);
+const CAT_KEYS = ['Moradia','Alimentação','Transporte','Lazer','Saúde','Outros'];
+const CAT_COLORS = ['#185FA5','#178A5A','#D85A30','#BA7517','#993556','#534AB7'];
+let active = 'Mar';
+let barChart, pieChart;
+
+const brl = v => 'R$ ' + Math.abs(v).toLocaleString('pt-BR', {minimumFractionDigits:2,maximumFractionDigits:2});
+
+function renderMonths() {
+  document.getElementById('months').innerHTML = MONTHS.map(m =>
+    `<button class="month-btn${m===active?' active':''}" onclick="setMonth('${m}')">${m}</button>`
+  ).join('');
+}
+
+function renderCards() {
+  const d = data[active];
+  const pct = Math.round(d.poupanca / d.receita * 100);
+  const delta = d.delta;
+  const badge = delta > 0 ? `<div class="card-badge pos">▲ ${delta.toFixed(1)}%</div>`
+              : delta < 0 ? `<div class="card-badge neg">▼ ${Math.abs(delta).toFixed(1)}%</div>` : '';
+  document.getElementById('cards').innerHTML = `
+    <div class="card"><div class="card-label">Receita total</div><div class="card-value">${brl(d.receita)}</div>${badge}</div>
+    <div class="card"><div class="card-label">Despesa total</div><div class="card-value">${brl(d.despesa)}</div></div>
+    <div class="card"><div class="card-label">Poupança</div><div class="card-value">${brl(d.poupanca)}</div></div>
+    <div class="card"><div class="card-label">Taxa de poupança</div><div class="card-value">${pct}%</div></div>
+  `;
+}
+
+function renderCharts() {
+  if (barChart) barChart.destroy();
+  if (pieChart) pieChart.destroy();
+
+  barChart = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: MONTHS,
+      datasets: [
+        { label: 'Receita', data: MONTHS.map(m => data[m].receita), backgroundColor: '#178A5A', borderRadius: 4, borderSkipped: false },
+        { label: 'Despesa', data: MONTHS.map(m => data[m].despesa), backgroundColor: '#D85A30', borderRadius: 4, borderSkipped: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, callback: v => 'R$'+v/1000+'k' } }
+      }
+    }
+  });
+
+  const d = data[active];
+  const pieVals = CAT_KEYS.map(k => d.cats[k]);
+
+  document.getElementById('pieLegend').innerHTML = CAT_KEYS.map((k,i) =>
+    `<div class="legend-item"><div class="legend-sq" style="background:${CAT_COLORS[i]}"></div>${k}</div>`
+  ).join('');
+
+  pieChart = new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: CAT_KEYS,
+      datasets: [{ data: pieVals, backgroundColor: CAT_COLORS, borderWidth: 0, hoverOffset: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '58%',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + brl(ctx.raw) } } }
+    }
+  });
+}
+
+function renderTable() {
+  document.querySelector('#txTable tbody').innerHTML = data[active].tx.map(t => `
+    <tr>
+      <td>${t.desc}</td>
+      <td><span class="dot" style="background:${t.type?'#178A5A':'#D85A30'}"></span>${t.cat}</td>
+      <td style="color:#888">${t.date}</td>
+      <td class="${t.type?'pos':'neg'}">${t.type?'+':''}${brl(t.val)}</td>
+    </tr>
+  `).join('');
+}
+
+window.setMonth = m => { active = m; renderMonths(); renderCards(); renderCharts(); renderTable(); };
+renderMonths(); renderCards(); renderCharts(); renderTable();
+</script>
+</body>
+</html>
